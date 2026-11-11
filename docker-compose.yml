@@ -1,13 +1,13 @@
 # One-command local demo: docker compose up --build
 # Gateway on http://localhost:8000 with the same two simulated providers as
 # `uvicorn llmgate.demo_app:app`. Demo keys: demo-key / admin-key.
-# Nothing here talks to a real provider or leaves localhost.
+# No real providers. The published host port is explicitly bound to IPv4 loopback.
 services:
   gateway:
     build: .
     image: llmgate:local
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       SIM_A_FAIL: "0"        # set to "1" to watch traffic fail over to sim-b
       DEMO_RATE: "50"        # demo-key request budget per second (burst = 2x)
