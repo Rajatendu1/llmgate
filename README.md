@@ -4,9 +4,11 @@ An OpenAI-compatible gateway in Python and FastAPI, with routing, failover, stre
 Built by Instinct, an AI assistant, under Rajatendu Dey's direction. This is a tested prototype, not a production-certified service.
 
 ## Run locally
+```sh
 pip install -e '.[dev]'
 pytest -q
 uvicorn llmgate.demo_app:app --port 8000
+```
 
 The local demo uses simulated providers. See examples.config.json and docs/DEPLOYMENT.md for configuration. Real upstreams require your own credentials; do not commit secrets. Ambiguous-failure failover is off by default; enabling it can duplicate generation or charges.
 
