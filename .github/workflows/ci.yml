@@ -33,3 +33,7 @@ jobs:
         run: bash e2e/run_e2e.sh
       - name: Local JavaScript smoke
         run: bash e2e/js_smoke.sh
+      - name: Build local demo image (no registry push)
+        run: docker build --tag llmgate:ci .
+      - name: Verify installed image over loopback HTTP
+        run: python e2e/docker_smoke.py llmgate:ci
