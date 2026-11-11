@@ -1,12 +1,13 @@
 """Redis-backed rate limiter: wiring, semantics, fail-closed behavior.
 
-The stub transport emulates the Upstash REST endpoint AND the atomic Lua
-semantics server-side (one synchronous handler = one atomic step), so two
-limiter/app instances sharing one stub behave like two function instances
-sharing one Redis. The deployed verification covers the real Lua script.
+The stub transport runs the actual Lua scripts under Lua 5.1, with a small
+Redis-command adapter (one synchronous handler = one atomic step). This checks
+script syntax and arithmetic, not Redis networking or server concurrency.
+Two app instances share one adapter for local multi-instance admission tests.
 """
 import asyncio, json
 import httpx, pytest
+from lupa.lua51 import LuaRuntime
 from llmgate.app import ApiKey, create_app
 from llmgate.providers import MockProvider
 from llmgate.redislimit import (CHARGE_LUA, TAKE_LUA, RateLimiterUnavailable,
@@ -18,8 +19,9 @@ BODY = {"model": "m", "messages": [{"role": "user", "content": "hello there worl
 
 
 class FakeUpstash:
-    """In-memory stand-in for the Upstash REST API, applying TAKE_LUA/CHARGE_LUA
-    semantics atomically per request. now_ms is injectable for refill tests."""
+    """Run the production scripts, not a Python reimplementation of them.
+    Only HMGET/HMSET/PEXPIRE are adapted; now_ms is injectable for refill tests.
+    """
 
     def __init__(self, now_ms=lambda: 0):
         self.store: dict[str, dict] = {}
@@ -34,24 +36,28 @@ class FakeUpstash:
             return httpx.Response(200, json={"result": "PONG"})
         assert cmd[0] == "EVAL" and cmd[2] == 1
         script, key = cmd[1], cmd[3]
-        capacity, rate, amount, _now, ttl = (float(x) for x in cmd[4:9])
-        now = self.now_ms()
-        h = self.store.get(key, {})
-        tokens = float(h.get("tokens", capacity))
-        ts = float(h.get("ts", now))
-        tokens = min(capacity, tokens + max(0, now - ts) / 1000.0 * rate)
+        runtime = LuaRuntime(unpack_returned_tuples=True)
+
+        def redis_call(command, key, *args):
+            if command == "HMGET":
+                h = self.store.get(key, {})
+                return runtime.table_from([h.get(field) for field in args])
+            if command == "HMSET":
+                h = self.store.setdefault(key, {})
+                h.update(zip(args[::2], args[1::2]))
+                return "OK"
+            if command == "PEXPIRE":
+                return 1
+            raise AssertionError(f"unexpected Redis command: {command}")
+
+        runtime.globals().redis = runtime.table_from({"call": redis_call})
+        runtime.globals().KEYS = runtime.table_from([key])
+        args = list(cmd[4:9])
+        args[3] = str(self.now_ms())
+        runtime.globals().ARGV = runtime.table_from(args)
+        result = runtime.execute(script)
         if script == TAKE_LUA:
-            if tokens >= amount:
-                tokens -= amount
-                result = [1, 0]
-            else:
-                result = [0, int((amount - tokens) / rate * 1000 + 0.999)]
-        elif script == CHARGE_LUA:
-            tokens -= amount
-            result = 1
-        else:  # pragma: no cover
-            return httpx.Response(400, json={"error": "unknown script"})
-        self.store[key] = {"tokens": tokens, "ts": now}
+            result = [result[1], result[2]]
         return httpx.Response(200, json={"result": result})
 
 
@@ -174,3 +180,59 @@ def test_from_env_candidates(monkeypatch):
     monkeypatch.setenv("UPSTASH_REDIS_REST_URL", "https://x.upstash.io")
     monkeypatch.setenv("UPSTASH_REDIS_REST_TOKEN", "tok")
     assert RedisRateLimiter.from_env() is not None
+
+
+async def test_actual_lua_credit_is_capped_at_burst():
+    store = FakeUpstash()
+    tb = redis_limiter(store).bucket("credit", rate=1.0, burst=20.0)
+    assert (await tb.take(17))[0]
+    await tb.charge(-100)  # a large refund cannot mint excess capacity
+    assert store.store[tb.key]["tokens"] == 20
+    assert (await tb.take(20))[0]
+    assert not (await tb.take())[0]
+
+
+async def test_actual_lua_refills_before_settlement_and_caps_credit():
+    now = [0]
+    store = FakeUpstash(now_ms=lambda: now[0])
+    tb = redis_limiter(store).bucket("refill", rate=2.0, burst=10.0)
+    assert (await tb.take(10))[0]
+    now[0] = 2000  # refill four tokens, then debit three
+    await tb.charge(3)
+    assert store.store[tb.key]["tokens"] == 1
+    await tb.charge(-20)
+    assert store.store[tb.key]["tokens"] == 10
+
+
+async def test_actual_lua_unused_output_reservation_is_refunded():
+    store = FakeUpstash()
+    _, c = _client(store, token_rate=1, token_burst=20)
+    async with c:
+        r = await c.post("/v1/chat/completions", json={**BODY, "max_tokens": 14}, headers=H)
+        assert r.status_code == 200
+        # 17 reserved, eight used, nine refunded: 12 tokens remain.
+        key = next(k for k in store.store if k.endswith(":1:20"))
+        assert store.store[key]["tokens"] == 12
+        follow = {**BODY, "messages": [{"role": "user", "content": " ".join(["w"] * 10)}]}
+        assert (await c.post("/v1/chat/completions", json=follow, headers=H)).status_code == 200
+
+
+async def test_settlement_failure_is_logged_without_claiming_refund(caplog):
+    store = FakeUpstash()
+    original = store.handler
+
+    def fail_settlement(request):
+        cmd = json.loads(request.content)
+        if cmd[0] == "EVAL" and cmd[1] == CHARGE_LUA:
+            return httpx.Response(503, json={"error": "settlement unavailable"})
+        return original(request)
+
+    store.handler = fail_settlement
+    _, c = _client(store, token_rate=1, token_burst=20)
+    async with c:
+        r = await c.post("/v1/chat/completions", json={**BODY, "max_tokens": 14}, headers=H)
+        assert r.status_code == 200  # upstream response already produced
+        key = next(k for k in store.store if k.endswith(":1:20"))
+        assert store.store[key]["tokens"] == 3  # reservation retained once
+        assert "rate limiter settlement failed" in caplog.text
+        assert "balance kept the estimate once" in caplog.text
