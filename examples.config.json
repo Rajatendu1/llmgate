@@ -1,0 +1,31 @@
+{
+  "keys_env": "LLMGATE_KEYS",
+  "providers": [
+    {
+      "name": "primary",
+      "type": "openai_compatible",
+      "base_url": "https://api.example.com/v1",
+      "api_key_env": "PRIMARY_API_KEY",
+      "models": [
+        "some-model"
+      ],
+      "model_map": {
+        "some-model": "vendor-exact-model-id"
+      },
+      "priority": 0,
+      "timeout": 30,
+      "price": {
+        "prompt_per_mtok": 2.5,
+        "completion_per_mtok": 10.0
+      }
+    },
+    {
+      "name": "backup-sim",
+      "type": "mock",
+      "models": [
+        "some-model"
+      ],
+      "priority": 1
+    }
+  ]
+}

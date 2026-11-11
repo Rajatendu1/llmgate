@@ -1,0 +1,78 @@
+# llmgate end-to-end demo - 2026-11-11 03:32:40 UTC
+# Python 3.10.12, uvicorn 0.54.0, port 8071
+# upstreams: simulated MockProvider fakes only; no real provider, no paid API calls
+
+# --- phase A: healthy gateway (sim-a primary, sim-b backup) ---
+ok 1 - healthz answers 200
+ok 2 - healthz reports ok
+ok 3 - missing key gets 401
+ok 4 - wrong key gets 401
+ok 5 - models list 200 with demo key
+ok 6 - models list contains gpt-sim
+ok 7 - chat completion 200
+ok 8 - served by primary sim-a
+ok 9 - usage reported on the response
+ok 10 - completion carries measured Server-Timing stages
+ok 11 - streaming completion 200
+ok 12 - stream carries SSE data frames
+ok 13 - stream terminates with [DONE]
+ok 14 - unknown model gets 404
+ok 15 - body without messages gets 400
+ok 16 - usage rejects a non-admin key
+ok 17 - usage answers the admin key
+ok 18 - usage meters both completed calls
+ok 19 - metrics rejects a non-admin key
+ok 20 - metrics answers the admin key
+ok 21 - metrics exposes request counters
+ok 22 - public demo stats answer 200
+ok 23 - demo stats show the metered traffic
+
+# --- phase B: request rate limit (2 req/s, burst 4) ---
+# statuses over 8 rapid requests: 200 200 200 200 429 429 429 429
+ok 24 - burst admits the first requests
+ok 25 - excess requests get 429
+ok 26 - 429 carries Retry-After
+
+# --- phase C: primary down - failover and circuit breaker ---
+ok 27 - clients still get 200 with the primary down
+ok 28 - backup sim-b serves all of them
+ok 29 - breaker for sim-a is open
+ok 30 - breaker for sim-b stays closed
+ok 31 - breaker gauge shows sim-a open
+ok 32 - usage shows the backup serving
+
+# --- phase D: token rate limit (5 tokens/s, burst 10) ---
+ok 33 - 30-token prompt exceeds the 10-token bucket
+ok 34 - token 429 explains the estimate
+ok 35 - token 429 carries Retry-After
+ok 36 - small prompt still passes
+ok 37 - max_tokens counts toward the admission estimate
+ok 38 - a modest max_tokens still passes
+
+# --- phase E: cost metering (simulated list prices) ---
+ok 39 - priced chat completion 200
+ok 40 - usage carries an estimated cost
+ok 41 - cost matches the price table
+ok 42 - metrics exposes the cost counter
+ok 43 - visitor try served
+ok 44 - visitor try reports the actual provider
+ok 45 - visitor try exposes no key material
+ok 46 - public request log answers 200
+ok 47 - request log recorded the visitor try
+ok 48 - request log labels the serving mode
+ok 49 - request log reports real latency and attempts
+ok 50 - request log carries no prompt content or key material
+ok 51 - real-model try degrades cleanly with no real provider
+ok 52 - real-model try error carries no key material
+ok 53 - backup-model try degrades cleanly with no backup route
+ok 54 - backup-model try error carries no key material
+ok 55 - visitor try accepts a custom prompt on the simulated route
+ok 56 - self-serve key mints with the vg_ prefix
+ok 57 - minted key serves the simulated route
+ok 58 - unknown minted-shape key is rejected
+ok 59 - injected 500 fails over to the backup provider
+ok 60 - fault header rejected for a static key
+ok 61 - own-key usage reads back the minted key's traffic
+
+1..61
+# E2E PASS: all 61 checks

@@ -1,0 +1,107 @@
+{
+  "keys_env": "LLMGATE_KEYS",
+  "providers": [
+    {
+      "name": "sim-a",
+      "type": "mock",
+      "models": [
+        "gpt-sim",
+        "gpt-sim-pro"
+      ],
+      "priority": 0,
+      "latency": 0.03,
+      "price": {
+        "prompt_per_mtok": 0.4,
+        "completion_per_mtok": 1.2
+      },
+      "timeout": 10,
+      "timeout_per_1k": 2.0,
+      "timeout_max": 30
+    },
+    {
+      "name": "sim-b",
+      "type": "mock",
+      "models": [
+        "gpt-sim",
+        "gpt-sim-pro"
+      ],
+      "priority": 1,
+      "latency": 0.05,
+      "price": {
+        "prompt_per_mtok": 0.8,
+        "completion_per_mtok": 2.4
+      },
+      "timeout": 10,
+      "timeout_per_1k": 2.0,
+      "timeout_max": 30
+    },
+    {
+      "name": "groq",
+      "type": "openai_compatible",
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_key_env": "GROQ_API_KEY",
+      "models": [
+        "gpt-real"
+      ],
+      "model_map": {
+        "gpt-real": "openai/gpt-oss-120b"
+      },
+      "priority": 0,
+      "price": {
+        "prompt_per_mtok": 0.0,
+        "completion_per_mtok": 0.0
+      },
+      "timeout": 20,
+      "timeout_per_1k": 2.0,
+      "timeout_max": 45,
+      "breaker_threshold": 3,
+      "breaker_cooldown": 30
+    },
+    {
+      "name": "groq-backup",
+      "type": "openai_compatible",
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_key_env": "GROQ_API_KEY",
+      "models": [
+        "gpt-real",
+        "gpt-real-backup"
+      ],
+      "model_map": {
+        "gpt-real": "openai/gpt-oss-20b",
+        "gpt-real-backup": "openai/gpt-oss-20b"
+      },
+      "priority": 1,
+      "price": {
+        "prompt_per_mtok": 0.0,
+        "completion_per_mtok": 0.0
+      },
+      "timeout": 20,
+      "timeout_per_1k": 2.0,
+      "timeout_max": 45,
+      "breaker_threshold": 3,
+      "breaker_cooldown": 30
+    }
+  ],
+  "failover_ambiguous": true,
+  "token_auth": {
+    "enabled": true,
+    "issuer": "llmgate-embedded",
+    "audience": "llmgate",
+    "scope_models": {
+      "llm:complete": [
+        "gpt-sim"
+      ],
+      "llm:expensive-models": [
+        "gpt-sim-pro"
+      ]
+    },
+    "required_scope": "llm:complete",
+    "rate": 20.0,
+    "burst": 40.0,
+    "demo": {
+      "enabled": true,
+      "cheap_model": "gpt-sim",
+      "expensive_model": "gpt-sim-pro"
+    }
+  }
+}
