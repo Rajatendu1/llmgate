@@ -23,6 +23,7 @@ class KeyPair:
     private_key: object
     public_key: object
     created_at: float = field(default_factory=time.time)
+    retired_at: float | None = None
 
     def private_pem(self) -> str:
         return self.private_key.private_bytes(
@@ -57,9 +58,9 @@ class KeyStore:
         self._current_kid: str | None = None
         self._persist = persist
         loaded = persist.load_keys() if persist else []
-        for kid, priv, created, is_current in loaded:
+        for kid, priv, created, is_current, retired_at in loaded:
             self._keys[kid] = KeyPair(kid=kid, private_key=priv,
-                                      public_key=priv.public_key(), created_at=created)
+                                      public_key=priv.public_key(), created_at=created, retired_at=retired_at)
             if is_current:
                 self._current_kid = kid
         if self._current_kid is None:
@@ -77,6 +78,9 @@ class KeyStore:
 
     def rotate(self) -> str:
         pair = self._generate()
+        now = time.time()
+        if self._current_kid is not None:
+            self._keys[self._current_kid].retired_at = now
         self._keys[pair.kid] = pair
         self._current_kid = pair.kid
         if self._persist:
@@ -84,14 +88,17 @@ class KeyStore:
         return pair.kid
 
     def retire_older_than(self, seconds: float, now: float | None = None) -> list[str]:
-        """Drop retired keys older than `seconds`. The current key never retires.
+        """Drop keys whose last-signing retirement was at least `seconds` ago.
 
         Only safe once every token signed by the retired key has expired:
         callers should pick a window at least the longest token TTL in use.
         """
+        import math
+        if not isinstance(seconds, (int, float)) or isinstance(seconds, bool) or not math.isfinite(seconds) or seconds < 0:
+            raise ValueError('retirement window must be finite nonnegative seconds')
         now = time.time() if now is None else now
         doomed = [kid for kid, kp in self._keys.items()
-                  if kid != self._current_kid and now - kp.created_at > seconds]
+                  if kid != self._current_kid and kp.retired_at is not None and now - kp.retired_at > seconds]
         for kid in doomed:
             del self._keys[kid]
             if self._persist:

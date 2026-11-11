@@ -75,7 +75,10 @@ def _bearer_claims(request: Request) -> dict:
     auth = request.headers.get("authorization", "")
     if not auth.lower().startswith("bearer "):
         raise pyjwt.InvalidTokenError("missing bearer token")
-    token = auth.split(None, 1)[1]
+    parts = auth.split()
+    if len(parts) != 2:
+        raise pyjwt.InvalidTokenError('missing bearer token')
+    token = parts[1]
     claims = jwks.verify(token, issuer=ISSUER, audience=demo_fixture.CALENDAR_API)
     if REVOKED_URL and claims.get("jti") in _revoked_set():
         raise TokenExchangeError("invalid_token", "token has been revoked", 401)

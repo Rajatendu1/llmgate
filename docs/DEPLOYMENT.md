@@ -96,7 +96,7 @@ The run is mirrored to `e2e/E2E_TRANSCRIPT.txt`. The committed transcript record
 ## Scoped bearer tokens (optional)
 
 A config may add a `token_auth` section enabling a second, additive credential
-path: an EMBEDDED issuer (vendored actas 0.8.1, RFC 8693 token exchange; see
+path: an EMBEDDED issuer (vendored Actas 0.14.1, RFC 8693 token exchange; see
 `vendor/ACTAS.md` for the pinned snapshot and its SHA256) issues JWTs whose
 scopes map - server-side, in this config - to a subset of the public model
 aliases. Static keys are unchanged and stay primary.
