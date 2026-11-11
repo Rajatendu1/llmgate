@@ -37,3 +37,8 @@ jobs:
         run: docker build --tag llmgate:ci .
       - name: Verify installed image over loopback HTTP
         run: python e2e/docker_smoke.py llmgate:ci
+      - name: Verify exact local-demo Compose recipe
+        run: |
+          docker version
+          docker compose version
+          python e2e/compose_smoke.py llmgate:ci
