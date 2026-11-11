@@ -4,7 +4,7 @@ Static API keys (app.py) are unchanged and stay the primary path. This module
 lets an issued token carry a NARROWER envelope than any configured key: which
 public model aliases the bearer may reach, enforced at request time.
 
-The issuer is EMBEDDED in this process (the vendored actas 0.8.1
+The issuer is EMBEDDED in this process (the vendored Actas 0.14.1
 TokenExchangeService, see vendor/ACTAS.md): llmgate issues and verifies in
 one trust domain. Nothing here is cross-service authorization, and no remote
 issuer is involved or claimed.

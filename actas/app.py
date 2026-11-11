@@ -9,7 +9,7 @@ from __future__ import annotations
 import pathlib
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import demo_fixture, errors, scopes, tokens
 from .exchange import GRANT_TYPE
@@ -51,7 +51,7 @@ client_auth = ClientAuthenticator(
     required=os.environ.get("ACTAS_REQUIRE_CLIENT_AUTH") == "1")
 ADMIN_TOKEN = os.environ.get("ACTAS_ADMIN_TOKEN")  # unset: admin endpoints disabled
 
-app = FastAPI(title="actas reference server", version="0.8.1")
+app = FastAPI(title="actas reference server", version="0.14.1")
 
 metrics = Metrics()
 
@@ -142,6 +142,7 @@ def token_endpoint(
     # RFC 9449 binding path: a DPoP proof on the token request binds the
     # issued token to the proof's key, as an alternative to the cnf_jwk form
     # field. The proof is verified here; the exchange then records cnf.jkt.
+    verified_dpop_jkt = None
     dpop_proof = request.headers.get("dpop")
     if dpop_proof:
         import json as _json
@@ -151,12 +152,16 @@ def token_endpoint(
         _dpop.verify_proof(
             dpop_proof, expected_jkt=jkt, method=request.method,
             uri=str(request.url), replay=proof_replay, nonce_store=nonce_store)
+        verified_dpop_jkt = jkt
         if cnf_jwk is not None:
             try:
-                if _dpop.thumbprint(_json.loads(cnf_jwk)) != jkt:
+                candidate_jwk = _json.loads(cnf_jwk)
+                if not isinstance(candidate_jwk, dict) or 'd' in candidate_jwk:
+                    raise errors.invalid_request('cnf_jwk must be a public key object')
+                if _dpop.thumbprint(candidate_jwk) != jkt:
                     raise errors.invalid_request(
                         "cnf_jwk and the DPoP proof carry different keys")
-            except ValueError:
+            except (ValueError, KeyError, TypeError):
                 raise errors.invalid_request("invalid cnf_jwk")
         cnf_jwk = _json.dumps(proof_jwk)
     result = service.exchange(
@@ -170,6 +175,8 @@ def token_endpoint(
         audience=audience,
         requested_ttl=requested_ttl,
         cnf_jwk=cnf_jwk,
+        authenticated_client_id=client_id if client_auth.required else None,
+        verified_dpop_jkt=verified_dpop_jkt,
     )
     return result.as_response()
 
@@ -235,7 +242,10 @@ def _require(scope_needed: str, audience: str):
             raise errors.TokenExchangeError(
                 "invalid_request", "missing bearer token", 401
             )
-        token = auth.split(None, 1)[1]
+        parts = auth.split()
+        if len(parts) != 2:
+            raise errors.TokenExchangeError('invalid_request', 'missing bearer token', 401)
+        token = parts[1]
         claims = tokens.verify_token(keystore, token, issuer=demo_fixture.ISSUER, audience=audience)
         if registry.is_revoked(claims.get("jti")):
             raise errors.TokenExchangeError("invalid_token", "token has been revoked", 401)
@@ -501,9 +511,11 @@ async def demo_lab(request: Request):
         return JSONResponse(
             {"error": "rate_limited", "error_description": "demo limit: 20 runs per minute"},
             status_code=429, headers={"Retry-After": "30"})
-    raw = await request.body()
-    if len(raw) > LAB_MAX_BODY:
-        raise errors.invalid_request("body too large")
+    raw = bytearray()
+    async for chunk in request.stream():
+        if len(raw) + len(chunk) > LAB_MAX_BODY:
+            raise errors.invalid_request("body too large")
+        raw.extend(chunk)
     import json as _j
     try:
         payload = _j.loads(raw)
@@ -512,6 +524,39 @@ async def demo_lab(request: Request):
     return lab.run_lab(payload)
 
 
+workbench_limiter = _Limiter(limit=20, window=60.0)
+
+
+@app.post("/tools/policy-compare")
+@app.post("/tools/policy-check")
+async def policy_check(request: Request):
+    """Evaluate a visitor's policy regression pack without keeping its contents."""
+    from . import workbench
+    client = request.client.host if request.client else "?"
+    fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if not workbench_limiter.allow(fwd or client):
+        return JSONResponse({"error": "rate_limited", "error_description": "20 checks per minute per instance"},
+                            status_code=429, headers={"Retry-After": "60", "Cache-Control": "no-store"})
+    raw = bytearray()
+    async for chunk in request.stream():
+        if len(raw) + len(chunk) > 65536:
+            raise errors.invalid_request("policy pack exceeds 64 KiB")
+        raw.extend(chunk)
+    try:
+        payload = workbench.load_pack_json(raw)
+    except (ValueError, RecursionError):
+        raise errors.invalid_request("body must be a JSON policy pack")
+    result = (workbench.compare_pack(payload) if request.url.path == "/tools/policy-compare"
+              else workbench.run_pack(payload))
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(DEMO_DIR / "index.html")
+    # Build systems can normalize file mtimes across different releases. Do not
+    # emit a Last-Modified validator derived from that timestamp: an older UI
+    # must not receive a 304 while the API has already changed.
+    return HTMLResponse((DEMO_DIR / "index.html").read_bytes(), headers={
+        "Cache-Control": "no-store", "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
+    })

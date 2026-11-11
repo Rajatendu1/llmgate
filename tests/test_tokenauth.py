@@ -126,7 +126,7 @@ async def test_cnf_bound_token_hard_rejected():
     """A proof-of-possession token is NOT accepted as a plain bearer token:
     bound tokens need a proof this deployment does not verify."""
     app, ks = make_app()
-    t = tok(ks, extra={"cnf": {"jkt": "thumbprint-of-a-key-we-never-see"}})
+    t = tok(ks, extra={"cnf": {"jkt": "A" * 43}})
     r = await post(app, t)
     assert r.status_code == 401
     assert "proof" in r.json()["error"]["message"]

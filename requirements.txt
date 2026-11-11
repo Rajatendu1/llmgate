@@ -3,4 +3,4 @@ uvicorn
 httpx
 sentry-sdk>=2.74
 PyJWT>=2.3
-cryptography>=41
+cryptography>=42

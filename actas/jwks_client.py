@@ -55,18 +55,35 @@ class JwksClient:
         return key
 
     def verify(self, token: str, *, issuer: str, audience: str) -> dict:
-        header = pyjwt.get_unverified_header(token)
+        from .tokens import MAX_TOKEN_BYTES
+        try:
+            if not isinstance(token, str) or not token or len(token.encode('utf-8')) > MAX_TOKEN_BYTES:
+                raise ValueError('token size or type invalid')
+            header = pyjwt.get_unverified_header(token)
+            if header.get('alg') != 'RS256' or not isinstance(header.get('kid'), str) or not 1 <= len(header['kid']) <= 128:
+                raise ValueError('unsupported algorithm or key identifier')
+        except (pyjwt.InvalidTokenError, UnicodeError, ValueError, TypeError, RecursionError):
+            raise pyjwt.InvalidTokenError('malformed token header')
         key = self.public_key_for(header.get("kid", ""))
         if key is None:
             raise pyjwt.InvalidTokenError("unknown signing key")
-        return pyjwt.decode(
-            token,
-            key=key.public_bytes(
-                serialization.Encoding.PEM,
-                serialization.PublicFormat.SubjectPublicKeyInfo,
-            ),
-            algorithms=["RS256"],
-            issuer=issuer,
-            audience=audience,
-            options={"require": ["exp", "iat", "iss", "sub"]},
-        )
+        try:
+            claims = pyjwt.decode(
+                token,
+                key=key.public_bytes(
+                    serialization.Encoding.PEM,
+                    serialization.PublicFormat.SubjectPublicKeyInfo,
+                ),
+                algorithms=["RS256"],
+                issuer=issuer,
+                audience=audience,
+                options={"require": ["exp", "iat", "iss", "sub", "jti", "aud"]},
+            )
+        except (ValueError, TypeError, OverflowError, RecursionError):
+            raise pyjwt.InvalidTokenError('malformed token claims')
+        from .tokens import validate_claim_shapes
+        try:
+            validate_claim_shapes(claims)
+        except (ValueError, TypeError, UnicodeError, RecursionError):
+            raise pyjwt.InvalidTokenError('malformed token claims')
+        return claims

@@ -33,6 +33,13 @@ class Persistence:
                                               detail TEXT, prev_hash TEXT, hash TEXT);
             """
         )
+        cols = {row[1] for row in self.conn.execute('PRAGMA table_info(keys)')}
+        if 'retired_at' not in cols:
+            self.conn.execute('ALTER TABLE keys ADD COLUMN retired_at REAL')
+        # Old databases recorded creation time, not last-signing time. Start a
+        # full overlap window now for unknown retired dates; never guess early.
+        import time
+        self.conn.execute('UPDATE keys SET retired_at=? WHERE current=0 AND retired_at IS NULL', (time.time(),))
         self.conn.commit()
 
     # keys ---------------------------------------------------------------
@@ -43,9 +50,10 @@ class Persistence:
             serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, enc)
         with self._lock:
             if current:
-                self.conn.execute("UPDATE keys SET current=0")
-            self.conn.execute("INSERT OR REPLACE INTO keys VALUES (?,?,?,?)",
-                              (pair.kid, pem, pair.created_at, int(current)))
+                import time
+                self.conn.execute("UPDATE keys SET current=0, retired_at=? WHERE current=1", (time.time(),))
+            self.conn.execute("INSERT OR REPLACE INTO keys (kid,pem,created_at,current,retired_at) VALUES (?,?,?,?,?)",
+                              (pair.kid, pem, pair.created_at, int(current), None if current else pair.retired_at))
             self.conn.commit()
 
     def delete_key(self, kid: str) -> None:
@@ -53,12 +61,12 @@ class Persistence:
             self.conn.execute("DELETE FROM keys WHERE kid=?", (kid,))
             self.conn.commit()
 
-    def load_keys(self) -> list[tuple[str, object, float, bool]]:
+    def load_keys(self) -> list[tuple[str, object, float, bool, float | None]]:
         with self._lock:
             rows = self.conn.execute(
-                "SELECT kid, pem, created_at, current FROM keys ORDER BY created_at").fetchall()
-        return [(k, serialization.load_pem_private_key(bytes(p), self._pass), c, bool(cur))
-                for k, p, c, cur in rows]
+                "SELECT kid, pem, created_at, current, retired_at FROM keys ORDER BY created_at").fetchall()
+        return [(k, serialization.load_pem_private_key(bytes(p), self._pass), c, bool(cur), retired)
+                for k, p, c, cur, retired in rows]
 
     # audit --------------------------------------------------------------
     def save_audit(self, entry) -> None:

@@ -1,7 +1,7 @@
 """/demo/delegate: one self-contained, end-to-end delegation exchange.
 
 One POST issues a root user token, exchanges it down to a parent agent and
-then a narrower sub-agent (RFC 8693, via the vendored actas 0.8.1
+then a narrower sub-agent (RFC 8693, via the vendored Actas 0.14.1
 TokenExchangeService), then runs the real consequences through this very app
 instance over ASGI: the sub-agent reaches a cheap alias and is REFUSED an
 expensive alias that its static key peers can reach; a scope-widening
