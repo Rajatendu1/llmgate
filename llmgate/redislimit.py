@@ -60,7 +60,7 @@ local tokens = tonumber(data[1])
 local ts = tonumber(data[2])
 if tokens == nil then tokens = capacity end
 if ts == nil then ts = now end
-tokens = math.min(capacity, math.min(capacity, tokens + math.max(0, now - ts) / 1000.0 * rate) - debit
+tokens = math.min(capacity, math.min(capacity, tokens + math.max(0, now - ts) / 1000.0 * rate) - debit)
 redis.call('HMSET', KEYS[1], 'tokens', tokens, 'ts', now)
 redis.call('PEXPIRE', KEYS[1], ttl)
 return 1
