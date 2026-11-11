@@ -156,7 +156,7 @@ section and the demo against `gpt-sim` / `gpt-sim-pro`.
 
 ## Honest limits
 
-- The Dockerfile and compose file provide install-and-run recipes. The container image itself has not been built or verified.
+- On 11 November 2026, [hosted CI](https://github.com/Rajatendu1/llmgate/actions/runs/42977091731/job/130378576049?pr=8) built the default Python 3.11 simulated image and checked installed gateway/Actas imports from site-packages, actual non-root execution, loopback HTTP health, authentication, completion, SSE, unknown-model rejection, admin isolation and usage in healthy and forced-primary-failure modes. This verifies the default demo image only. Docker Compose and mounted real-provider configurations remain unverified; no image was pushed or deployed.
 - Usage metering and rate limits are per process by default and can use a shared Redis store when configured. Rate limiting fails closed when the store is unreachable. Circuit-breaker and latency state remain per process. Usage telemetry is not billing-grade.
 - No TLS inside the container; put it behind a proxy that terminates TLS.
 - Demo keys are hard-coded in `llmgate/demo_app.py`; real deployments use
