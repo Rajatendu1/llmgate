@@ -79,7 +79,34 @@ attempt counts, and no prompt content or key material), and the real-model and
 backup-model Try paths failing closed with a clean 404 when no real route is
 configured.
 
-The run is mirrored to `e2e/E2E_TRANSCRIPT.txt`. The committed transcript records a historical local run. A sample CI definition is retained at `docs/ci.example.yml`; it is not active. Run `pytest`, `bash e2e/run_e2e.sh` and `bash e2e/js_smoke.sh` locally.
+The run is mirrored to `e2e/E2E_TRANSCRIPT.txt`. The committed transcript records
+a historical local run. The active workflow in `.github/workflows/` runs pytest,
+this HTTP suite and the local JavaScript smoke test. `docs/ci.example.yml` is
+only a historical example. Run the same gates locally with:
+
+```bash
+python -m pytest -q
+bash e2e/run_e2e.sh
+bash e2e/js_smoke.sh
+bash e2e/js_smoke.sh --simulated-only
+```
+
+## GitHub-backed deployment checks
+
+Use a pull request and the required source check before normal merge to main.
+Do not bypass branch protection. Vercel builds from the repository; preview
+and production environments can have different provider and store settings.
+Check the exact source head, staged production runtime and configuration before
+promotion. After promotion, check the live workflows end to end, including the
+changed behavior and relevant failures, and inspect desktop/mobile layouts.
+Keep the previous deployment available for rollback.
+
+A ready build or `/healthz` response alone does not establish token settlement,
+upstream model availability or pricing. For a settlement change, use a bounded
+simulated-only key to check two large token reservations after small actual
+responses. Confirm the second admission occurs too soon for ordinary refill
+to explain it. If the result is inconclusive, say so. Do not call real providers
+or spend money just to turn an untested path into a passing check.
 
 ## Environment knobs
 
