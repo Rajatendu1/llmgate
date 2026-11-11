@@ -8,7 +8,11 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 PORT=8078
 
-export GROQ_API_KEY="dummy-local-smoke-key"
+if [ "${1:-}" = "--simulated-only" ]; then
+  unset GROQ_API_KEY
+else
+  export GROQ_API_KEY="dummy-local-smoke-key"
+fi
 export LLMGATE_KEYS='{"demo-key": {"name": "demo", "rate": 50, "burst": 100}, "admin-key": {"name": "admin", "admin": true}}'
 
 python3 -m uvicorn index:app --port $PORT > /tmp/js-smoke-server.log 2>&1 &
@@ -21,4 +25,4 @@ for i in $(seq 1 40); do
   sleep 0.25
 done
 
-node scripts/js_smoke.mjs "http://127.0.0.1:$PORT/"
+node scripts/js_smoke.mjs "http://127.0.0.1:$PORT/" "${1:-}"

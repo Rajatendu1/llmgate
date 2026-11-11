@@ -13,6 +13,7 @@ import { join } from 'node:path';
 
 const PAGE = process.argv[2] || 'http://127.0.0.1:8078/';
 const PORT = 9377;
+const SIMULATED_ONLY = process.argv.includes('--simulated-only');
 const profile = mkdtempSync(join(tmpdir(), 'js-smoke-'));
 const chrome = spawn('google-chrome', [
   '--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
@@ -79,6 +80,9 @@ async function main() {
     realBtnShown: (document.getElementById('try-real') || {}).style ? document.getElementById('try-real').style.display !== 'none' : false,
     realLineShown: (document.getElementById('real-line') || {}).style ? document.getElementById('real-line').style.display !== 'none' : false,
     realLine: document.getElementById('real-line') ? document.getElementById('real-line').textContent : '',
+    deploymentMode: document.getElementById('deployment-mode')?.textContent || '',
+    backupShown: document.getElementById('try-backup')?.style.display !== 'none',
+    intro: document.querySelector('.sub')?.textContent || '',
     logRows: document.querySelectorAll('#log-body tr').length,
     edges: ['edge-sim-a','edge-sim-b','edge-groq','edge-groq-backup'].map(id => !!document.getElementById(id)),
   })`);
@@ -90,8 +94,11 @@ async function main() {
   expect('no uncaught exceptions or console.error while rendering', true, '');
   expect('pill reaches a settled state', c.pill === 'ok' || c.pill === 'bad', `pill=${c.pill}`);
   expect('pill is not stuck on an error with healthy local providers', c.pill === 'ok', `pill=${c.pill} text=${c.pillText}`);
-  expect('real-Try button is shown when a real-mode provider exists', c.realBtnShown, 'try-real hidden');
-  expect('real-line names the real route', /real route/i.test(c.realLine), c.realLine.slice(0, 80));
+  expect('real-Try visibility matches configured routes', c.realBtnShown === !SIMULATED_ONLY, JSON.stringify(c));
+  expect('backup visibility matches configured routes', c.backupShown === !SIMULATED_ONLY, JSON.stringify(c));
+  expect('deployment text matches configured routes', SIMULATED_ONLY ? /simulated-only/.test(c.deploymentMode) : /real-provider routes configured/.test(c.deploymentMode), c.deploymentMode);
+  expect('real-line matches configured routes', SIMULATED_ONLY ? !c.realLineShown : /Configured real routes/i.test(c.realLine), c.realLine.slice(0, 80));
+  expect('intro does not assert live upstream access or free pricing', !/is connected|No paid model|no spend/i.test(c.intro), c.intro);
   expect('diagram has an edge per provider including both real ones', c.edges.every(Boolean), JSON.stringify(c.edges));
 
   // Delegation demo: click the button, let the full exchange flow run, then
@@ -151,7 +158,7 @@ async function main() {
       return JSON.stringify({ sim: r1.status, real: r2.status });
     })()`));
     expect('minted key serves the simulated route', use.sim === 200, `sim=${use.sim}`);
-    expect('minted key is refused by the real route', use.real === 403, `real=${use.real}`);
+    expect('minted key never reaches a real model', use.real === (SIMULATED_ONLY ? 404 : 403), `real=${use.real}`);
   }
   expect('no uncaught exceptions or console.error from the self-serve key flow', true, '');
 

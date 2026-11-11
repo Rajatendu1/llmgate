@@ -1,7 +1,7 @@
 """Public-demo entry point for serverless/container deploys.
 
-Uses the project's own config factory with mock providers only (no real
-upstreams). Client keys come from the LLMGATE_KEYS environment variable
+Uses the project's config factory. Simulated providers are always configured;
+real routes activate only when their required upstream credential is present. Client keys come from the LLMGATE_KEYS environment variable
 (see llmgate.app.keys_from_env); nothing secret lives in this file.
 Adds a static landing page at GET / so the root URL is usable in a browser.
 """
