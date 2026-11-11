@@ -1,0 +1,26 @@
+{
+  "providers": [
+    {
+      "name": "local",
+      "type": "mock",
+      "models": [
+        "cheap",
+        "expensive"
+      ],
+      "latency": 0
+    }
+  ],
+  "token_auth": {
+    "enabled": true,
+    "issuer": "local-issuer",
+    "audience": "local-gateway",
+    "scope_models": {
+      "llm:complete": [
+        "cheap"
+      ],
+      "llm:premium": [
+        "expensive"
+      ]
+    }
+  }
+}
