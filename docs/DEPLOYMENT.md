@@ -19,7 +19,7 @@ uvicorn llmgate.demo_app:app --port 8000
 
 ```bash
 docker build -t llmgate .
-docker run --rm -p 8000:8000 llmgate
+docker run --rm -p 127.0.0.1:8000:8000 llmgate
 ```
 
 The image is `python:3.11-slim` with the package installed, running as a
@@ -31,7 +31,7 @@ the command with the config factory. Upstream secrets and client keys come
 from environment variables only - never from the image or the config file:
 
 ```bash
-docker run --rm -p 8000:8000 \
+docker run --rm -p 127.0.0.1:8000:8000 \
   -e LLMGATE_CONFIG=/cfg/prod.json -e LLMGATE_KEYS -e PRIMARY_API_KEY \
   -v "$PWD/my.json:/cfg/prod.json:ro" \
   llmgate python -m uvicorn --factory llmgate.config:app --host 0.0.0.0 --port 8000
@@ -42,6 +42,14 @@ docker run --rm -p 8000:8000 \
 ```bash
 docker compose up --build   # gateway on http://localhost:8000
 ```
+
+The local recipes explicitly publish `127.0.0.1:8000:8000`, rather than all
+host interfaces. Keep this loopback binding: the demo has public, fixed client
+and admin keys and no TLS. Do not use it as a public service. Docker releases
+older than 28.0.0 have a [documented localhost-publishing caveat](https://github.com/docker/docs/blob/main/content/manuals/engine/network/port-publishing.md)
+that can allow access from the same network segment; use a current engine.
+This host binding is not an outbound-network sandbox or a replacement for
+firewalls, authentication or production hardening.
 
 `docker-compose.yml` is a single service in demo mode. Set `SIM_A_FAIL=1` in
 its environment to watch traffic fail over to the backup provider.
