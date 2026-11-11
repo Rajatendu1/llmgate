@@ -293,7 +293,8 @@ h2, .panel { opacity: 0; transform: translateY(14px); transition: opacity .55s e
     <span>llmgate &middot; live demo</span>
   </div>
   <h1>One front door for<br>every model call.</h1>
-  <p class="sub">This is a running LLM gateway: it routes, fails over, rate-limits and meters every request, behind an OpenAI-compatible API. Two <em>simulated</em> providers answer by default; one <span style="color:var(--amber)">real</span> free-tier model (Groq) is connected behind the same pipeline. No paid model, no spend.</p>
+  <p class="sub">This is a running LLM gateway: it routes, fails over, rate-limits and meters every request, behind an OpenAI-compatible API. The default request uses <em>simulated</em> providers. Real-model controls appear only when this deployment has a matching configured route; configuration does not prove upstream availability or pricing.</p>
+  <p id="deployment-mode" class="note">Route availability is shown below after metadata loads.</p>
   <p style="margin-bottom:0"><span id="pill"><span class="dot"></span><span id="pill-text">connecting ...</span></span></p>
 </header>
 
@@ -302,8 +303,8 @@ h2, .panel { opacity: 0; transform: translateY(14px); transition: opacity .55s e
 <p style="margin-top:0;margin-bottom:.4rem">
 <input id="try-prompt" type="text" maxlength="280" placeholder="Optional: your own prompt for the simulated route (max 280 chars), e.g. Summarize gravity in one sentence">
 <button id="try" class="primary" type="button">Send a test request through the gateway</button>
-<button id="try-real" class="real-btn" type="button" style="display:none">Send one through the real model (Groq)</button>
-<button id="try-backup" class="real-btn" type="button" style="display:none">Send one through the backup model (Groq)</button>
+<button id="try-real" class="real-btn" type="button" style="display:none">Send one through the configured real route</button>
+<button id="try-backup" class="real-btn" type="button" style="display:none">Send one through the configured backup route</button>
 </p>
 <ol class="journey" id="journey" aria-label="Pipeline stages each request passes through">
   <li data-stage="auth"><span class="jl">auth</span></li>
@@ -313,14 +314,14 @@ h2, .panel { opacity: 0; transform: translateY(14px); transition: opacity .55s e
   <li data-stage="metering"><span class="jl">metering</span></li>
 </ol>
 <p id="try-result" class="note" style="margin-bottom:.7rem">Every served request crosses the five stages above; a click sweeps them, reports the measured total latency, and leaves each stage label carrying its measured share of that request (the gateway's Server-Timing header). The sweep itself is illustrative, and a refused request lights nothing: the page says only what the response says.</p>
-<p class="note" style="margin-bottom:0">The first button (simulated) sends the prompt above - or a fixed one-liner when it is empty - through the running gateway (auth, admission, routing, failover, metering) to the mock providers. Custom prompts stay on the simulated route; the real buttons below always send their fixed one-line prompt. It uses a server-side visitor key you never see: max 24 tokens, at most 10 per minute per address, with its own small shared budget, so clicking fast just gets 429s. No spend, nothing outside this demo.</p>
-<details style="margin:.5rem 0 0"><summary style="cursor:pointer">budgets and limits for these buttons</summary><p id="try-real-note2" class="note" style="margin:.5rem 0 0;display:none">The real-model button sends the same fixed one-line prompt through the same pipeline to Groq (free tier, $0.00, low reasoning effort): gpt-oss-120b first, and if that model declines, the same-provider backup gpt-oss-20b on the same account - the served-by column and reply line then name the backup and its upstream model. Real tokens, real latency, real reply, and a <span class="badge real">real</span> row in the log below. Its shared budget is deliberately tight (about one request per 100 seconds across all visitors) to stay well inside the provider's free daily quota; a 429 means the budget is recharging.</p>
-<p id="try-backup-note" class="note" style="margin:.5rem 0 0;display:none">The backup button routes the same fixed prompt straight to the same-provider backup model (gpt-oss-20b): it shows the backup model answering - it is not a failover, since nothing has failed. Failover itself is what happens on the primary button when the primary declines. Both real buttons share the one tight visitor budget above.</details></p>
+<p class="note" style="margin-bottom:0">The first button (simulated) sends the prompt above - or a fixed one-liner when it is empty - through the running gateway (auth, admission, routing, failover, metering) to the mock providers. Custom prompts stay on the simulated route; any real-model controls use a fixed one-line prompt. It uses an in-process visitor identity, not a reusable bearer key: max 24 tokens, at most 10 per minute per address, with its own small shared budget, so clicking fast just gets 429s. No spend, nothing outside this demo.</p>
+<details style="margin:.5rem 0 0"><summary style="cursor:pointer">budgets and limits for these buttons</summary><p id="try-real-note2" class="note" style="margin:.5rem 0 0;display:none">The real-route button sends a fixed one-line prompt through the same pipeline. The response names the serving provider and upstream model; a successful call uses real provider resources. Provider pricing and quotas depend on the account and are not verified by this page. Both real controls share a tight budget (about one request per 100 seconds across all visitors). A 429 reports a rate or token limit; it is not proof that every upstream is healthy.</p>
+<p id="try-backup-note" class="note" style="margin:.5rem 0 0;display:none">The backup button sends the fixed prompt directly to the configured backup alias. A direct backup request is not evidence of failover. Automatic failover depends on the primary response and the gateway retry policy. Both real controls share the tight visitor budget above.</p></details>
 </div>
 
 <h2>Use the API yourself</h2>
 <div class="panel">
-<p class="note" style="margin-top:0">This demo is also an API you can drive. Mint a temporary key and call the gateway from any OpenAI-compatible client: your request crosses the same auth, admission, routing, failover and metering, and lands in the live log below. Keys reach the <em>simulated</em> fleet only - the real route refuses them (403) - and expire after 24 hours.</p>
+<p class="note" style="margin-top:0">This demo is also an API you can drive. Mint a temporary key and call the gateway from any OpenAI-compatible client: your request crosses the same auth, admission, routing, failover and metering, and lands in the live log below. Keys reach the <em>simulated</em> fleet only and expire after 24 hours. They never grant real-model access; rejection of an unavailable alias does not prove a real route is configured.</p>
 <p style="margin:.4rem 0"><button id="mint" class="primary" type="button">Mint a temporary demo key</button>
 <button id="mint-copy" type="button" style="display:none">Copy key</button></p>
 <pre class="keyblock" id="mint-key" style="display:none"></pre>
@@ -352,7 +353,7 @@ h2, .panel { opacity: 0; transform: translateY(14px); transition: opacity .55s e
 
 <h2>Live request flow</h2>
 <div class="panel">
-<svg id="flow" viewBox="0 0 700 308" role="img" aria-label="Request flow: client to gateway to two simulated providers and the real Groq route with its same-provider backup"></svg>
+<svg id="flow" viewBox="0 0 700 308" role="img" aria-label="Request flow: client to gateway to configured providers; inactive routes are labeled"></svg>
 <p class="note" id="real-line" style="display:none;margin:.6rem 0 0"></p>
 <div id="counters">
   <div class="counter"><div class="v" id="c-req">-</div><div class="l">requests</div></div>
@@ -409,7 +410,7 @@ curl -H "Authorization: Bearer YOUR_DEMO_KEY" \
      -H "content-type: application/json" \
      -d '{"model":"gpt-sim","messages":[{"role":"user","content":"hello"}]}' \
      https://llmgate-demo.vercel.app/v1/chat/completions</pre>
-<p class="note">Run a few completions and watch them pulse through the diagram above. The demo key is shared privately, not published here. Edge protection: 60 requests/minute per IP, then HTTP 429. Per-key rate limits and usage totals are kept in a shared Redis store, so they hold across function instances; circuit-breaker state is per function instance (self-healing, by design). The cost figure prices simulated usage at the demo's simulated list prices - an estimate, not billing. This is a demo on free tiers, and nothing here is production-ready.</p>
+<p class="note">Run a few completions and watch them pulse through the diagram above. The demo key is shared privately, not published here. Edge protection: 60 requests/minute per IP, then HTTP 429. The metering status above reports whether this deployment uses a shared store or per-instance memory. Shared-store limits coordinate function instances; in-memory limits do not. Circuit-breaker state stays per instance. The cost figure prices simulated usage at the demo's simulated list prices - an estimate, not billing. This is a demo, not a production-ready service. Provider and hosting charges depend on the account and are not verified by this page.</p>
 <script>
 const $ = id => document.getElementById(id);
 const svgNS = 'http://www.w3.org/2000/svg';
@@ -551,8 +552,8 @@ function render(j) {
     b.textContent = 'breaker: ' + p.breaker;
     b.setAttribute('class', 'breaker ' + p.breaker);
     if (p.breaker !== 'closed') allClosed = false;
-    $('price-' + p.name).textContent = p.price ?
-      '$' + p.price.prompt_per_mtok + ' / $' + p.price.completion_per_mtok + ' per 1M tok' : '';
+    $('price-' + p.name).textContent = p.mode === 'real' ? 'pricing not verified' : (p.price ?
+      '$' + p.price.prompt_per_mtok + ' / $' + p.price.completion_per_mtok + ' per 1M tok' : '');
     const edge = $('edge-' + p.name);
     if (edge) edge.setAttribute('class', 'edge ' + (/groq/.test(p.name) ? 'live-real' : 'live-sim') + (p.breaker === 'open' ? ' open' : ''));
     if (prev && !reduceMotion && edge) {
@@ -571,10 +572,12 @@ function render(j) {
     if (!active) { const b = $('breaker-' + name); if (b) b.textContent = 'not active'; }
   }
   const realProvs = j.providers.filter(p => p.mode === 'real');
+  $('deployment-mode').textContent = realProvs.length
+    ? 'This deployment has simulated and real-provider routes configured. A configured route is not an upstream health or pricing check.'
+    : 'This deployment is simulated-only. No real-provider route is configured.';
   $('real-line').style.display = realProvs.length ? '' : 'none';
-  if (realProvs.length) $('real-line').textContent = 'The real route above: one provider (Groq free tier) - ' +
-    'primary model gpt-oss-120b, same-provider backup gpt-oss-20b on the same account, both served under the alias gpt-real.';
-  const hasReal = realProvs.length > 0;
+  if (realProvs.length) $('real-line').textContent = 'Configured real routes: ' + realProvs.map(p => p.name + ' (' + (p.models || []).join(', ') + ')').join('; ') + '. Provider access and pricing are account-specific.';
+  const hasReal = realProvs.some(p => (p.models || []).includes('gpt-real'));
   $('try-real').style.display = hasReal ? '' : 'none';
   $('try-real-note2').style.display = hasReal ? '' : 'none';
   const hasBackup = realProvs.some(p => (p.models || []).includes('gpt-real-backup'));
@@ -582,7 +585,7 @@ function render(j) {
   $('try-backup-note').style.display = hasBackup ? '' : 'none';
   $('pill').className = allClosed ? 'ok' : 'bad';
   $('pill-text').textContent = allClosed
-    ? 'all providers healthy - metering: ' + (j.metering === 'redis' ? 'shared store' : 'per instance')
+    ? 'configured breakers closed - metering: ' + (j.metering === 'redis' ? 'shared store' : 'per instance')
     : 'a circuit breaker is not closed';
 }
 
