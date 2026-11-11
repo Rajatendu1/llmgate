@@ -47,7 +47,7 @@ original Actas tests and the gateway's separate regression checks.
 
 ## Demo and limits
 https://llmgate-demo.vercel.app/
-The public demo labels simulated and real-model paths. Redis-backed limits are optional; breaker and latency state are per process. Usage telemetry is not billing-grade. The Docker packaging has not been built or verified.
+The public demo labels simulated and real-model paths. Redis-backed limits are optional; breaker and latency state are per process. Usage telemetry is not billing-grade. The default simulated Docker image was built and checked on hosted CI on 11 November 2026, including installed-package imports, non-root execution, authentication, streaming and forced-primary failover. Docker Compose and mounted real-provider configurations remain unverified.
 
 ## Repository setup
 GitHub is the source of truth for project changes. The active

@@ -17,6 +17,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY pyproject.toml ./
 COPY llmgate ./llmgate
+COPY actas ./actas
 RUN pip install --no-cache-dir . && useradd --uid 10001 --create-home llmgate
 USER llmgate
 EXPOSE 8000
