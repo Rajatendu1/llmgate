@@ -13,7 +13,16 @@ uvicorn llmgate.demo_app:app --port 8000
 The local demo uses simulated providers. See examples.config.json and docs/DEPLOYMENT.md for configuration. Real upstreams require your own credentials; do not commit secrets. Ambiguous-failure failover is off by default; enabling it can duplicate generation or charges.
 
 ## Verification
-The Actas 0.14.1 integration candidate passed 266 pytest cases, 61 end-to-end HTTP checks and a JavaScript smoke gate locally. The benchmarks use simulated providers and are not capacity claims. Optional real-provider tests skip without credentials.
+The November 11, 2026 Redis-settlement maintenance candidate passed 274 pytest
+cases, 61 local end-to-end HTTP checks, and JavaScript smoke checks in both
+simulated-only and real-route-configured modes. The latter uses a local dummy
+credential and does not call a real provider. Redis limiter tests execute the
+actual Lua 5.1 scripts rather than reimplement their arithmetic.
+
+These are dated local results, not a claim that every future commit passes.
+See [GitHub Actions](https://github.com/Rajatendu1/llmgate/actions) for hosted
+results at a particular head. The benchmarks use simulated providers and are
+not capacity claims. Optional real-provider tests skip without credentials.
 
 ## How llmgate uses Actas
 
@@ -41,4 +50,14 @@ https://llmgate-demo.vercel.app/
 The public demo labels simulated and real-model paths. Redis-backed limits are optional; breaker and latency state are per process. Usage telemetry is not billing-grade. The Docker packaging has not been built or verified.
 
 ## Repository setup
-This initial publication does not connect GitHub to Vercel or enable GitHub Actions. The existing CI definition is retained as docs/ci.example.yml, outside the active workflow directory. No license has been added to this repository.
+GitHub is the source of truth for project changes. The active
+[workflow](.github/workflows/ci.yml) runs pytest, local HTTP end-to-end tests
+and a local JavaScript smoke test for pull requests and pushes to main.
+Protected main requires its source check before normal merge. Vercel is
+connected to this repository; preview builds are distinct from production.
+Verify a staged production build before promotion, then check live workflows
+end to end, including the changed behavior and failure cases. A ready build
+or health probe alone is not proof of token settlement or real-provider access.
+
+The historical example at `docs/ci.example.yml` is not the active workflow.
+No license has been added to this repository.
