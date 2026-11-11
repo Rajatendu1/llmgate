@@ -19,7 +19,7 @@ uvicorn llmgate.demo_app:app --port 8000
 
 ```bash
 docker build -t llmgate .
-docker run --rm -p 8000:8000 llmgate
+docker run --rm -p 127.0.0.1:8000:8000 llmgate
 ```
 
 The image is `python:3.11-slim` with the package installed, running as a
@@ -31,7 +31,7 @@ the command with the config factory. Upstream secrets and client keys come
 from environment variables only - never from the image or the config file:
 
 ```bash
-docker run --rm -p 8000:8000 \
+docker run --rm -p 127.0.0.1:8000:8000 \
   -e LLMGATE_CONFIG=/cfg/prod.json -e LLMGATE_KEYS -e PRIMARY_API_KEY \
   -v "$PWD/my.json:/cfg/prod.json:ro" \
   llmgate python -m uvicorn --factory llmgate.config:app --host 0.0.0.0 --port 8000
@@ -42,6 +42,14 @@ docker run --rm -p 8000:8000 \
 ```bash
 docker compose up --build   # gateway on http://localhost:8000
 ```
+
+The local recipes explicitly publish `127.0.0.1:8000:8000`, rather than all
+host interfaces. Keep this loopback binding: the demo has public, fixed client
+and admin keys and no TLS. Do not use it as a public service. Docker releases
+older than 28.0.0 have a [documented localhost-publishing caveat](https://github.com/docker/docs/blob/main/content/manuals/engine/network/port-publishing.md)
+that can allow access from the same network segment; use a current engine.
+This host binding is not an outbound-network sandbox or a replacement for
+firewalls, authentication or production hardening.
 
 `docker-compose.yml` is a single service in demo mode. Set `SIM_A_FAIL=1` in
 its environment to watch traffic fail over to the backup provider.
@@ -156,7 +164,7 @@ section and the demo against `gpt-sim` / `gpt-sim-pro`.
 
 ## Honest limits
 
-- On 11 November 2026, [hosted CI](https://github.com/Rajatendu1/llmgate/actions/runs/42977091731/job/130378576049?pr=8) built the default Python 3.11 simulated image and checked installed gateway/Actas imports from site-packages, actual non-root execution, loopback HTTP health, authentication, completion, SSE, unknown-model rejection, admin isolation and usage in healthy and forced-primary-failure modes. This verifies the default demo image only. Docker Compose and mounted real-provider configurations remain unverified; no image was pushed or deployed.
+- On 11 November 2026, [hosted CI](https://github.com/Rajatendu1/llmgate/actions/runs/42977091731/job/130378576049?pr=8) built the default Python 3.11 simulated image and checked installed gateway/Actas imports from site-packages, actual non-root execution, loopback HTTP health, authentication, completion, SSE, unknown-model rejection, admin isolation and usage in healthy and forced-primary-failure modes. This verifies the default demo image only. Separately, on the same date, [Compose CI](https://github.com/Rajatendu1/llmgate/actions/runs/42979140919/job/130385152959?pr=9) ran the exact default recipe with Docker Engine 28.0.4 and Compose v2.38.2, inspected its published HostIp as 127.0.0.1 only, confirmed the tested image and installed non-root packages, and passed nine healthy simulated HTTP assertions. Compose forced-failover and mounted real-provider configurations remain unverified; no image was pushed or deployed.
 - Usage metering and rate limits are per process by default and can use a shared Redis store when configured. Rate limiting fails closed when the store is unreachable. Circuit-breaker and latency state remain per process. Usage telemetry is not billing-grade.
 - No TLS inside the container; put it behind a proxy that terminates TLS.
 - Demo keys are hard-coded in `llmgate/demo_app.py`; real deployments use
