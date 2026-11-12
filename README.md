@@ -10,19 +10,36 @@ pytest -q
 uvicorn llmgate.demo_app:app --port 8000
 ```
 
-Or install the CLI from GitHub and serve your own config:
+Or install the CLI from GitHub and serve a config:
 
 ```sh
 pip install 'git+https://github.com/Rajatendu1/llmgate.git'
 export LLMGATE_KEYS='{"my-key": {"name": "me", "rate": 10, "burst": 20}}'
-llmgate serve --config examples.config.json --port 8000
 ```
 
-The JSON config lists providers (see examples.config.json). A real upstream
-route activates only when its `api_key_env` credential is set in the
-environment; otherwise that route is skipped with a logged warning and mock
-providers, which need no credentials, keep serving. See docs/DEPLOYMENT.md for
-the full configuration reference.
+A minimal simulated-provider config needs no credentials:
+
+```json
+{
+  "keys_env": "LLMGATE_KEYS",
+  "providers": [
+    {"name": "sim", "type": "mock", "models": ["demo-model"], "priority": 0}
+  ]
+}
+```
+
+Save it as `demo.config.json` and serve it:
+
+```sh
+llmgate serve --config demo.config.json --port 8000
+```
+
+The JSON config lists providers; the repo's `examples.config.json` shows a
+real upstream route with mock failover. A real upstream route activates only
+when its `api_key_env` credential is set in the environment; otherwise that
+route is skipped with a logged warning and mock providers, which need no
+credentials, keep serving. See docs/DEPLOYMENT.md for the full configuration
+reference.
 
 The local demo uses simulated providers. See examples.config.json and docs/DEPLOYMENT.md for configuration. Real upstreams require your own credentials; do not commit secrets. Ambiguous-failure failover is off by default; enabling it can duplicate generation or charges.
 
