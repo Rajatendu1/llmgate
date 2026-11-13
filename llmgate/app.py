@@ -359,10 +359,15 @@ def create_app(router: Router, keys: dict[str, ApiKey], clock=time.monotonic,
             return _err(413, "request body too large", "invalid_request", sth())
         try:
             body = json.loads(raw)
-            assert isinstance(body, dict) and isinstance(body.get("model"), str)
-            assert isinstance(body.get("messages"), list) and body["messages"]
-            assert all(isinstance(m, dict) for m in body["messages"])
-            assert body.get("stream", False) in (True, False)
+            # Request validation must survive python -O / PYTHONOPTIMIZE.
+            # JSON numbers 0/1 compare equal to bools, but are not booleans.
+            if not (isinstance(body, dict)
+                    and isinstance(body.get("model"), str)
+                    and isinstance(body.get("messages"), list)
+                    and body["messages"]
+                    and all(isinstance(m, dict) for m in body["messages"])
+                    and type(body.get("stream", False)) is bool):
+                raise ValueError("invalid chat request shape")
         except Exception:
             return _err(400, "body must be JSON with 'model', non-empty 'messages' and boolean 'stream'",
                         "invalid_request", sth())
